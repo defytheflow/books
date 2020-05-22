@@ -14,7 +14,29 @@
 
 #define HELP_MSG "Try 'detab -h' for more information."
 
-void usage()
+void usage(void);
+void parse_opts(int argc, char** argv, int* tab_out);
+
+int main(int argc, char** argv)
+{
+    char c;
+    int tab = 4;
+
+    parse_opts(argc, argv, &tab);
+
+    while ((c = (char) getchar()) != EOF) {
+        if (c == '\t') {
+            for (int i = 0; i < tab; ++i)
+                putchar(' ');
+        }
+        else
+            putchar(c);
+    }
+
+    return 0;
+}
+
+void usage(void)
 {
     puts("Converts tabs to spaces.\n");
 
@@ -43,29 +65,10 @@ void parse_opts(int argc, char** argv, int* tab_out)
             fprintf(stderr, "Error: ");
             if (optopt == 't')
                 fprintf(stderr, "option -'%c' requires an argument.\n", optopt);
-            else {
+            else
                 fprintf(stderr, "unknown option '-%c'.\n", optopt);
-                fprintf(stderr, "%s\n", HELP_MSG);
-                exit(1);
-            }
+            fprintf(stderr, "%s\n", HELP_MSG);
+            exit(1);
         }
     }
-}
-
-int main(int argc, char** argv)
-{
-    char c;
-    int tab = 8;
-
-    parse_opts(argc, argv, &tab);
-
-    while ((c = (char) getchar()) != EOF) {
-        if (c == '\t')
-            for (int i = 0; i < tab; ++i)
-            putchar(' ');
-        else
-            putchar(c);
-    }
-
-    return 0;
 }

@@ -11,17 +11,34 @@
 
 #include <stdio.h>
 
-#define WRAP 40
-#define MAX_LINE 256
+#define FOLD     40
+#define MAXLINE 256
 
-void print_wrap(const char line[])
+int get_line(char* s, int lim);
+void print_fold(const char* line);
+
+int main(void)
 {
-    for (int i = 0; i < WRAP; ++i)
-        putchar(line[i]);
-    puts("");
+    int len, fold_count;
+    char line[MAXLINE];
+
+    while ((len = get_line(line, MAXLINE)) > 0) {
+        if (len < FOLD)
+           printf("%s", line);
+        else {
+            fold_count = 0;
+            while (len > FOLD) {
+                print_fold(line + FOLD * fold_count);
+                len -= FOLD;
+                ++fold_count;
+            }
+            printf("%s", line + FOLD * fold_count);
+        }
+    }
+
+    return 0;
 }
 
-/* get_line: read a line into s, return length */
 int get_line(char s[], int lim)
 {
     int c, i;
@@ -36,24 +53,9 @@ int get_line(char s[], int lim)
     return i;
 }
 
-int main(void)
+void print_fold(const char* line)
 {
-    int len, wrap_count;
-    char line[MAX_LINE];
-
-    while ((len = get_line(line, MAX_LINE)) > 0) {
-        if (len < WRAP)
-           printf("%s", line);
-        else {
-            wrap_count = 0;
-            while (len > WRAP) {
-                print_wrap(line + WRAP * wrap_count);
-                len -= WRAP;
-                ++wrap_count;
-            }
-            printf("%s", line + WRAP * wrap_count);
-        }
-    }
-
-    return 0;
+    for (int i = 0; i < FOLD; ++i)
+        putchar(line[i]);
+    putchar('\n');
 }

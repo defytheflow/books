@@ -13,10 +13,36 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define MAX_LINE 512
+#define MAXLINE 512
 #define HELP_MSG "Try 'entab -h' for more information."
 
-void usage()
+void usage(void);
+void parse_opts(int argc, char** argv, int* tab_out);
+int check_next(char* line, int count, char c);
+int get_line(char s[], int lim);
+
+int main(int argc, char** argv)
+{
+    int i, len, tab;
+    char line[MAXLINE];
+
+    tab = 4;
+    parse_opts(argc, argv, &tab);
+
+    while ((len = get_line(line, MAXLINE)) > 0) {
+        for (i = 0; i < len - tab + 1; ++i)
+            if (line[i] == ' ' && check_next(line + i + 1, tab - 1, ' ')) {
+                putchar('\t');
+                i += tab - 1;
+            } else
+                putchar(line[i]);
+        printf("%s", line + i);
+    }
+
+    return 0;
+}
+
+void usage(void)
 {
     puts("Converts spaces to tabs.\n");
 
@@ -53,7 +79,6 @@ void parse_opts(int argc, char** argv, int* tab_out)
     }
 }
 
-
 /* Check that next 'count' chars are equal to 'c' */
 int check_next(char* line, int count, char c)
 {
@@ -64,7 +89,6 @@ int check_next(char* line, int count, char c)
     return 1;
 }
 
-/* get_line: read a line into s, return length */
 int get_line(char s[], int lim)
 {
     int c, i;
@@ -77,25 +101,4 @@ int get_line(char s[], int lim)
 
     s[i] = '\0';
     return i;
-}
-
-int main(int argc, char** argv)
-{
-    int i, len, tab;
-    char line[MAX_LINE];
-
-    tab = 8;
-    parse_opts(argc, argv, &tab);
-
-    while ((len = get_line(line, MAX_LINE)) > 0) {
-        for (i = 0; i < len - tab + 1; ++i)
-            if (line[i] == ' ' && check_next(line+i+1, tab-1, ' ')) {
-                putchar('\t');
-                i += tab - 1;
-            } else
-                putchar(line[i]);
-        printf("%s", line + i);
-    }
-
-    return 0;
 }
