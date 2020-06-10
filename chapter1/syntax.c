@@ -14,24 +14,31 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define STACKSIZE 1024
-#define STACKEMPTY '\0'
-#define NOPAIR '\0'
+#define STACK_SIZE 1024
+#define STACK_EMPTY '\0'
+#define NO_MATCH_PAREN '\0'
+#define MAX_ERR_MSG 80
 
 bool stack_empty(void);
 char stack_pop(void);
 void stack_print(void);
 void stack_push(char c);
-char stack_end(void);
-
-char token_pair(char c);
 
 void skip_oneline_comment(FILE* stream);
 void skip_multiline_comment(FILE* stream);
 
-char stack[STACKSIZE];
+bool are_opposite_paren(char c1, char c2);
+char get_match_paren(char c);
+bool is_open_paren(char c);
+bool is_close_paren(char c);
+
+void syntax_error(const char* fname, const char* err_msg);
+int getch(FILE* stream);
+
 int sp = 0;  // Stack pointer.
 int ln = 1;  // Line number.
+int cn = 1;  // Char number.
+char stack[STACK_SIZE];
 
 int main(int argc, char* argv[])
 {
@@ -46,12 +53,11 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    char c, d;
-    while ((c = getc(in)) != EOF) {
-
-        // Skip comments.
+    char c, d, err_msg[MAX_ERR_MSG];
+    while ((c = getch(in)) != EOF) {
+        // Ignore syntax inside comments.
         if (c == '/') {
-            if ((d = getc(in)) == '/') {
+            if ((d = getch(in)) == '/') {
                 skip_oneline_comment(in);
                 continue;
             }
@@ -63,20 +69,27 @@ int main(int argc, char* argv[])
                 ungetc(d, in);
         }
 
-        // Ignore inside quotes.
+        // Ignore syntax inside quotes.
         if (strchr("'\"", c)) {
-            stack_push(c);
-            while ((d = getc(in)) != c) {
+            while ((d = getch(in)) != c) {
+                if (d == '\n') { // No matching quote.
+                    snprintf(err_msg, MAX_ERR_MSG, "missing terminating %c character", c);
+                    syntax_error(argv[1], err_msg);
+                }
                 if (d == '\\')
-                    getc(in);  // Ignore escape sequences.
+                    getch(in);  // Ignore escape sequences.
             }
-            stack_pop();
         }
 
         if (strchr("()[]{}", c)) {
-            if (!stack_empty() && stack_end() == token_pair(c)) {
-                stack_pop();
-                continue;
+            if (!stack_empty()) {
+                if (stack[sp-1] == get_match_paren(c)) { // If paren matches.
+                    stack_pop();
+                    continue;
+                } else if (are_opposite_paren(stack[sp-1], c)) { // If doesn't match.
+                    snprintf(err_msg, MAX_ERR_MSG, "expected '%c'", get_match_paren(stack[sp-1]));
+                    syntax_error(argv[1], err_msg);
+                }
             }
             stack_push(c);
         }
@@ -85,44 +98,84 @@ int main(int argc, char* argv[])
             ++ln;
     }
 
+#ifdef DEBUG
     stack_print();
+#endif
+
+    if (!stack_empty()) { // If didn't match all parens.
+        snprintf(err_msg, MAX_ERR_MSG, "expected '%c'", get_match_paren(stack[sp-1]));
+        syntax_error(argv[1], err_msg);
+    }
 
     return 0;
+}
+
+/*
+ * Wrapper around getch, that updates char number.
+ */
+int getch(FILE* stream)
+{
+    int c = getc(stream);
+    cn = (c == '\n') ? 0 : cn + 1;
+    return c;
+}
+
+/*
+ * Reports a syntax error with line and char numbers, terminates the program.
+ */
+void syntax_error(const char* fname, const char* err_msg)
+{
+    fprintf(stderr, "%s:%d:%d: error: %s\n", fname, ln, cn, err_msg);
+    exit(1);
 }
 
 void skip_oneline_comment(FILE* stream)
 {
     int c;
-    while ((c = getc(stream)) != '\n')
+    while ((c = getch(stream)) != '\n')
         ;
     ungetc('\n', stream);
 }
 
 void skip_multiline_comment(FILE* stream)
 {
-    int c = getc(stream);
-    int d = getc(stream);
+    int c = getch(stream);
+    int d = getch(stream);
     while (c != '*' || d != '/') {
         if (c == '\n')
             ++ln;
         c = d;
-        d = getc(stream);
+        d = getch(stream);
     }
 }
 
-char token_pair(char c)
+char get_match_paren(char c)
 {
-    static const char* open = "([{\"'";
-    static const char* close = ")]}\"'";
+    switch (c) {
+        case '(': return ')';
+        case ')': return '(';
+        case '[': return ']';
+        case ']': return '[';
+        case '{': return '}';
+        case '}': return '{';
+        default: return NO_MATCH_PAREN;
+    }
+}
 
-    char* p;
-    if ((p = strchr(open, c)))
-        return close[p - open];
+bool is_open_paren(char c)
+{
+    return c == '(' || c == '[' || c == '{';
+}
 
-    if ((p = strchr(close, c)))
-        return open[p - close];
+bool is_close_paren(char c)
+{
+    return c == ')' || c == ')' || c == '}';
+}
 
-    return NOPAIR;
+bool are_opposite_paren(char c1, char c2)
+{
+    return (is_open_paren(c1) && is_close_paren(c2)) ||
+            (is_open_paren(c2) && is_close_paren(c1));
 }
 
 bool stack_empty(void)
@@ -133,8 +186,10 @@ bool stack_empty(void)
 char stack_pop(void)
 {
     if (sp < 0)
-        return STACKEMPTY;
+        return STACK_EMPTY;
+#ifdef DEBUG
     printf("%d: Popped %c\n", ln, stack[sp - 1]);
+#endif
     return stack[--sp];
 }
 
@@ -148,15 +203,12 @@ void stack_print(void)
 
 void stack_push(char c)
 {
-    if (sp == STACKSIZE) {
+    if (sp == STACK_SIZE) {
         fprintf(stderr, "Error: stack overflow.\n");
         exit(1);
     }
     stack[sp++] = c;
-    printf("%d: Pushed %c\n", ln, c);
-}
-
-char stack_end(void)
-{
-    return stack[sp - 1];
+#ifdef DEBUG
+    printf("%d: pushed %c\n", ln, c);
+#endif
 }
